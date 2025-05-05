@@ -1,0 +1,21 @@
+# Use the same base image and dependencies as the backend
+FROM python:3.11-slim
+
+# Set a working directory
+WORKDIR /app
+
+# Install VTK dependencies
+RUN apt-get update && apt-get install -y \
+    libgl1-mesa-glx \
+    libxrender1 \
+    libxtst6 \
+    libxi6 \
+    libx11-6 \
+    libxext6 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY backend/ .
+
+CMD ["celery", "-A", "tasks", "worker", "--loglevel=info"]

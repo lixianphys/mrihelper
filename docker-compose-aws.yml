@@ -1,0 +1,62 @@
+services:
+  fastapi:
+      build:
+        context: .
+        dockerfile: Dockerfile.backend
+      networks:
+        - app-network
+      ports:
+        - "8001:8001"
+      depends_on:
+        redis:
+          condition: service_started
+        rabbitmq:
+          condition: service_started
+      env_file:
+        - .env.aws
+
+  celery:
+    build:
+      context: .
+      dockerfile: Dockerfile.celery
+    command: sh -c "sleep 15 && celery -A tasks.celery_app worker --loglevel=info"
+    networks:
+      - app-network
+    depends_on:
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_started
+    env_file:
+      - .env.aws
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    networks:
+      - app-network
+    ports:
+      - "8000:80"
+    environment:
+      - API_BASE_URL=${API_BASE_URL:-http://fastapi:8001}
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"  # AMQP protocol port
+      - "15672:15672"  # Management UI
+    networks:
+      - app-network
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER:-guest}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS:-guest}
+      
+  redis:
+    image: redis:latest
+    networks:
+      - app-network
+    ports:
+      - "6379:6379"
+
+networks:
+  app-network:
+    driver: bridge
