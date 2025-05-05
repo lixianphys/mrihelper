@@ -1,6 +1,11 @@
 # Build stage for Vite frontend
 FROM node:18-alpine AS build
 
+# Declare build argument
+ARG VITE_API_BASE_URL
+# Set environment variable from argument
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+
 # Set working directory
 WORKDIR /app
 
