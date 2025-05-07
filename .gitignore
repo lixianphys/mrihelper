@@ -94,3 +94,5 @@ frontend-test/
 
 terraform/
 k8s/
+
+ssl_certs/

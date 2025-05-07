@@ -1,21 +1,22 @@
 services:
   fastapi:
-      build:
-        context: .
-        dockerfile: Dockerfile.backend
-      networks:
-        - app-network
-      ports:
-        - "8001:8001"
-      depends_on:
-        redis:
-          condition: service_started
-        rabbitmq:
-          condition: service_started
-      env_file:
-        - .env.minio
-      environment:
-        - ALLOWED_ORIGINS=http://167.71.58.79:8000
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    networks:
+      - app-network
+    expose: # Expose port only to linked services on the docker network
+      - "8001"
+    depends_on:
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_started
+    env_file:
+      - .env.minio
+    environment:
+      # Update with your actual domain once you have one for HTTPS
+      - ALLOWED_ORIGINS=https://167.71.58.79
   celery:
     build:
       context: .
@@ -30,21 +31,27 @@ services:
         condition: service_started
     env_file:
       - .env.minio
-  frontend:
+
+  frontend: # Role changed to builder of static assets
     build:
       context: .
-      dockerfile: Dockerfile.frontend
+      dockerfile: Dockerfile.frontend # This Dockerfile should only build assets
       args:
+        # /api is relative to the nginx_proxy which will serve on the domain root
         - VITE_API_BASE_URL=/api
-    networks:
-      - app-network
-    ports:
-      - "8000:80"
+    volumes:
+      - frontend_static_files:/app/dist # Output build to named volume
+    # This service builds assets and then can exit.
+    # The 'depends_on' in nginx_proxy ensures this build completes.
+    # A simple command to ensure it exits cleanly after build can be useful if needed.
+    # command: ["sh", "-c", "echo 'Frontend assets built.' && exit 0"]
+
+
   rabbitmq:
     image: rabbitmq:3-management
     ports:
-      - "5672:5672"  # AMQP protocol port
-      - "15672:15672"  # Management UI
+      - "5672:5672"
+      - "15672:15672"
     networks:
       - app-network
     environment:
@@ -61,8 +68,8 @@ services:
   minio:
     image: minio/minio:latest
     ports:
-      - "9000:9000"  # API
-      - "9001:9001"  # Console
+      - "9000:9000"
+      - "9001:9001"
     networks:
       - app-network
     environment:
@@ -77,6 +84,26 @@ services:
       timeout: 5s
       retries: 3
 
+  nginx_proxy: # Single public-facing Nginx
+    image: nginx:alpine
+    container_name: nginx_proxy
+    ports:
+      - "80:80"    # For http://ip (standard HTTP port)
+      - "8000:80"  # For http://ip:8000
+      - "443:443"  # For https://ip (standard HTTPS port)
+    volumes:
+      - ./nginx_proxy.conf:/etc/nginx/conf.d/default.conf:ro # Main Nginx config
+      - ./ssl_certs:/etc/nginx/ssl:ro # SSL certificates
+      - frontend_static_files:/var/www/frontend_html:ro # Mount built static assets from frontend service
+    networks:
+      - app-network
+    depends_on:
+      frontend: # Ensures frontend build completes and volume is populated
+        condition: service_completed_successfully # Assumes frontend build exits 0 on success
+      fastapi: 
+        condition: service_started
+    restart: unless-stopped
+
 networks:
   app-network:
     driver: bridge
@@ -84,3 +111,6 @@ networks:
 volumes:
   minio-data:
     driver: local
+  frontend_static_files: # Named volume for sharing frontend assets with nginx_proxy
+    driver: local
+
