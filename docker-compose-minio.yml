@@ -54,9 +54,8 @@ services:
       - "15672:15672"
     networks:
       - app-network
-    environment:
-      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER:-guest}
-      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS:-guest}
+    env_file:
+      - .env.minio
       
   redis:
     image: redis:latest
@@ -72,9 +71,8 @@ services:
       - "9001:9001"
     networks:
       - app-network
-    environment:
-      - MINIO_ROOT_USER=minioadmin
-      - MINIO_ROOT_PASSWORD=minioadmin
+    env_file:
+      - .env.minio
     command: server /data --console-address ":9001"
     volumes:
       - minio-data:/data
